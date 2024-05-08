@@ -24,6 +24,8 @@
 /* USER CODE BEGIN INCLUDE */
 #define MaxCommandsInBuffer 10 //max 10 commands can be received and saved without overwriting. Each command has a max size of APP_RX_DATA_SIZE
 
+uint8_t Rxbuffer[1024];
+uint8_t Txbuffer[1024];
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,7 +52,22 @@
   */
 
 /* USER CODE BEGIN PRIVATE_TYPES */
-
+static
+struct
+{
+int
+pos_receive, pos_process;
+//pos_receive is the current position in buffer to save incoming data. pos_process is the index of data in buffer which has been processed.
+//if pos_receive=pos_process, it means all data were processed, waiting for new data coming
+unsigned
+char
+IsCommandDataReceived;
+//anynumber >0 means data were received. 0 means no data is available
+uint8_t UserRxBufferFS[MaxCommandsInBuffer][APP_RX_DATA_SIZE];
+//it could save <MaxCommandsInBuffer> number of commands
+uint8_t CommandsLens[MaxCommandsInBuffer];
+//save the len of each command
+} s_RxBuffers;
 /* USER CODE END PRIVATE_TYPES */
 
 /**
@@ -75,42 +92,41 @@
   */
 
 /* USER CODE BEGIN PRIVATE_MACRO */
-
+int8_t VCP_retrieveInputData(uint8_t* Buf, uint32_t *Len)
+{
+if
+(s_RxBuffers.IsCommandDataReceived==0)
+return
+0;
+//no data received
+int
+index=s_RxBuffers.pos_process;
+*Len=s_RxBuffers.CommandsLens[index];
+//return the length
+memcpy(Buf,s_RxBuffers.UserRxBufferFS[index],*Len);
+Buf[*Len]=
+'\0'
+;
+//testing only. make sure there is ending char in the returned command string
+//check if all data were processed.
+s_RxBuffers.pos_process++;
+if
+(s_RxBuffers.pos_process>=MaxCommandsInBuffer)
+//reach the last buffer, need to rewind to 0
+{
+s_RxBuffers.pos_process=0;
+}
+if
+(s_RxBuffers.pos_process==s_RxBuffers.pos_receive)s_RxBuffers.IsCommandDataReceived=0;
+//check if all data were processed
+return
+1;
+}
 /* USER CODE END PRIVATE_MACRO */
 
 /**
   * @}
   */
-
-/** @defgroup USBD_CDC_IF_Private_Variables USBD_CDC_IF_Private_Variables
-  * @brief Private variables.
-  * @{
-  */
-/* Create buffer for reception and transmission           */
-/* It's up to user to redefine and/or remove those define */
-/** Received data over USB are stored in this buffer      */
-uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
-
-/** Data to send over USB CDC are stored in this buffer   */
-uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
-
-/* USER CODE BEGIN PRIVATE_VARIABLES */
-static
-struct
-{
-int
-pos_receive, pos_process;
-//pos_receive is the current position in buffer to save incoming data. pos_process is the index of data in buffer which has been processed.
-//if pos_receive=pos_process, it means all data were processed, waiting for new data coming
-unsigned
-char
-IsCommandDataReceived;
-//anynumber >0 means data were received. 0 means no data is available
-uint8_t UserRxBufferFS[MaxCommandsInBuffer][APP_RX_DATA_SIZE];
-//it could save <MaxCommandsInBuffer> number of commands
-uint8_t CommandsLens[MaxCommandsInBuffer];
-//save the len of each command
-} s_RxBuffers;
 
 
 /* USER CODE END PRIVATE_VARIABLES */
@@ -171,8 +187,8 @@ static int8_t CDC_Init_FS(void)
 {
   /* USER CODE BEGIN 3 */
   /* Set Application Buffers */
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Txbuffer, 0);
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, Rxbuffer);
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -276,21 +292,6 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-/**
-  * @brief  Data received over USB OUT endpoint are sent over CDC interface
-  *         through this function.
-  *
-  *         @note
-  *         This function will issue a NAK packet on any OUT packet received on
-  *         USB endpoint until exiting this function. If you exit this function
-  *         before transfer is complete on CDC interface (ie. using DMA controller)
-  *         it will result in receiving more data while previous ones are still
-  *         not sent.
-  *
-  * @param  Buf: Buffer of data to be received
-  * @param  Len: Number of data received (in bytes)
-  * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
-  */
 int8_t CDC_Receive_FS (uint8_t* Buf, uint32_t *Len)
 {
 
@@ -314,47 +315,7 @@ USBD_CDC_ReceivePacket(&hUsbDeviceFS);// Tell that you are ready to receive the 
 return
 USBD_OK;
 /* USER CODE END 6 */
-}/**
- * @brief VCP_retrieveInputData, defined by user
- * Call this function frequently to check if data is received.
- *
- *
- *
- * @param Buf: Buffer of data to be received
- * @param Len: Number of data received (in bytes)
- * @retval 0 means no data was received.
- */
- int8_t VCP_retrieveInputData(uint8_t* Buf, uint32_t *Len)
- {
- if
- (s_RxBuffers.IsCommandDataReceived==0)
- return
- 0;
- //no data received
- int
- index=s_RxBuffers.pos_process;
- *Len=s_RxBuffers.CommandsLens[index];
- //return the length
- memcpy(Buf,s_RxBuffers.UserRxBufferFS[index],*Len);
- Buf[*Len]=
- '\0'
- ;
- //testing only. make sure there is ending char in the returned command string
- //check if all data were processed.
- s_RxBuffers.pos_process++;
- if
- (s_RxBuffers.pos_process>=MaxCommandsInBuffer)
- //reach the last buffer, need to rewind to 0
- {
- s_RxBuffers.pos_process=0;
- }
- if
- (s_RxBuffers.pos_process==s_RxBuffers.pos_receive)s_RxBuffers.IsCommandDataReceived=0;
- //check if all data were processed
- return
- 1;
- }
-
+}
 
 /**
   * @brief  CDC_Transmit_FS

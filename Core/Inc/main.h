@@ -111,12 +111,32 @@ extern "C" {
 		// 3V3
 #define RelayPort3 GPIOB
 #define RelayPin3 4
+
+
+// Button inputs
+	// button 1
+#define RelayPort0 GPIOA
+#define RelayPin0 9
+
+// button 2
+#define RelayPort1 GPIOA
+#define RelayPin1 11
+
+// button 3
+#define RelayPort2 GPIOC
+#define RelayPin2 11
+
+// button 4
+#define RelayPort3 GPIOB
+#define RelayPin3 4
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
 /* USER CODE END EM */
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
