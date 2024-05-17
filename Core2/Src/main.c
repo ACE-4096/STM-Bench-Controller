@@ -142,7 +142,6 @@ int main(void)
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_TIM3_Init();
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   /* USER CODE BEGIN 2 */
 
   while (1)
@@ -381,76 +380,44 @@ int main(void)
  		 }
 
  	 }
- 	if (containsStr("SET:", SerialStr) >= 0){
-		if (containsStr("VOLT", SerialStr) >= 0 && strlen(SerialStr) > 10){
-			nullstr(strOutBuf, 1024);
 
-			char *start =  &SerialStr[9];
-			char *end =  &SerialStr[14];
-			char *substr = (char *)calloc(1, end - start + 1);
-			memcpy(substr, start, end - start);
-			float TargetVoltage = atof(substr);
-			sprintf(strOutBuf, "Set to %s V\r\n", substr);
-			SendStrToUSB(strOutBuf);
-			nullstr(strOutBuf, 1024);
+ 	if (containsStr("SET:VOLT", SerialStr) >= 0 && strlen(SerialStr) > 10){
+ 		nullstr(strOutBuf, 1024);
 
-			float ActualVoltage = Measure(0, Vadj);
+ 		char *start =  &SerialStr[9];
+ 		char *end =  &SerialStr[14];
+ 		char *substr = (char *)calloc(1, end - start + 1);
+ 		memcpy(substr, start, end - start);
+ 		float TargetVoltage = atof(substr);
+ 		sprintf(strOutBuf, "Set to %s V\r\n", substr);
+		SendStrToUSB(strOutBuf);
+ 		nullstr(strOutBuf, 1024);
 
-			uint16_t CurrentPWM = 0;
-			int PWMIncrement = TargetVoltage > ActualVoltage ? 65 : -65;
+ 		float ActualVoltage = Measure(0, Vadj);
 
-			while(ActualVoltage < TargetVoltage && CurrentPWM < 65535){
-				CurrentPWM += PWMIncrement;
-				PWM(CurrentPWM);
-				ActualVoltage = Measure(0, Vadj);
-				float VREF_plus = (float)1.212 * ((float)*getVrefCalData(0) / (float)*getVrefCalData(1));
-				float Vref = (VREF_plus / (float)getVref(4000)) * 4095;
-				float OutputVoltage = ((Vref / 65535) * CurrentPWM);
-				sprintf(strOutBuf, "DAC: %d / %0.3f V - Vadj: %0.3f V\r\n", CurrentPWM, OutputVoltage, ActualVoltage);
-				SendStrToUSB(strOutBuf);
-				nullstr(strOutBuf, 1024);
-				HAL_Delay(1000);
-			}
+ 		uint16_t CurrentPWM = 0;
+ 		int PWMIncrement = TargetVoltage > ActualVoltage ? 1 : -1;
 
-			nullstr(SerialStr, 1024);
-		}else if (containsStr("DAC", SerialStr) >= 0 && strlen(SerialStr) > 10){
-			nullstr(strOutBuf, 1024);
+ 		while(ActualVoltage < TargetVoltage && CurrentPWM < 100){
+ 			CurrentPWM += PWMIncrement;
+ 			PWM(CurrentPWM);
+ 			ActualVoltage = Measure(0, Vadj);
+ 			float VREF_plus = (float)1.212 * ((float)*getVrefCalData(0) / (float)*getVrefCalData(1));
+ 		 	float Vref = (VREF_plus / (float)getVref(4000)) * 4095;
+ 		 	float OutputVoltage = ((Vref / 100) * CurrentPWM);
+ 	 		sprintf(strOutBuf, "DAC: %d / %0.3f V - Vadj: %0.3f V\r\n", CurrentPWM, OutputVoltage, ActualVoltage);
+ 			SendStrToUSB(strOutBuf);
+ 	 		nullstr(strOutBuf, 1024);
+ 	 		HAL_Delay(1000);
+ 		}
 
-			char *start =  &SerialStr[8];
-			char *end =  &SerialStr[strlen(SerialStr)-1];
-			char *substr = (char *)calloc(1, end - start + 1);
-			memcpy(substr, start, end - start);
-			int TargetDAC = atoi(substr);
-
-			sprintf(strOutBuf, "Set to %d V\r\n", TargetDAC);
-			SendStrToUSB(strOutBuf);
-			nullstr(strOutBuf, 1024);
-
-			float ActualVoltage = Measure(0, Vadj);
-
-			PWM((uint16_t)TargetDAC);
-
-			sprintf(strOutBuf, "DAC: %d Estimated Voltage: %0.3fV\r\n", TargetDAC, ActualVoltage);
-			SendStrToUSB(strOutBuf);
-			nullstr(strOutBuf, 1024);
-
-			nullstr(SerialStr, 1024);
-		}
+		nullstr(SerialStr, 1024);
  	}
   }
 void PWM(uint16_t value)
 {
-	if (value > 65535){
-		sprintf(strOutBuf, "Value Too High %d\r\n", value);
-		SendStrToUSB(strOutBuf);
-		nullstr(strOutBuf, 1024);
-		return;
-	}
-
-	sprintf(strOutBuf, "Value: %d\r\n", value);
-	SendStrToUSB(strOutBuf);
-	nullstr(strOutBuf, 1024);
-	TIM3->CCR2 = value;
+	TIM3->CCR1 = value;
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 }
 
 void nullstr(char* str, uint16_t size){
@@ -1016,7 +983,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 71;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 100;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
